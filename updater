@@ -1,0 +1,376 @@
+#!/usr/bin/python3.10
+# updater
+# Version 1.0
+# Nicholas Girga
+# Released under MIT license with ABSOLUTELY NO WARRANTY
+
+# a basic update script for GitHub releases
+
+""" imports """
+import datetime, os, subprocess, sys
+
+""" constants """
+APP_VERSION = "1.0"
+GITHUB_DOMAIN = "https://github.com"
+LOG_FILE = "./logs/updater.log" # the location of the log file
+CONFIG_FILE = "./config/updater.conf" # the location of the config file
+DATETIME_FORMAT = "%b %-d, %Y at %-I:%M:%S %p" # how the date will be formatted in console messages as well as logs
+
+""" functions """
+# returns true if directory existed before the function was called; creates missing directory if specified
+def directory_exists(path: str, create_if_missing = True) -> bool:
+    # check if directory exists
+    if not os.path.isdir(path):
+        if create_if_missing:
+            os.makedirs(path)
+        return False
+    return True
+
+# returns true if file existed before the function was called; creates missing file if specified
+def file_exists(path: str, create_if_missing = True) -> bool:
+    # check if file exists
+    if not os.path.isfile(path):
+        if create_if_missing:
+            directory_exists(os.path.dirname(path))
+            file = open(path, "w")
+            file.close()
+        return False
+    return True
+
+# accepts the project_overview_url and returns the url of the latest download of it (for github.com)
+def get_latest_github_release(project_overview_url: str) -> str:
+    GITHUB_RELEASES_FILE = ".github_releases.html"
+    DATETIME_FORMAT = "%b %-d, %Y at %-I:%M:%S %p"
+
+    # construct the url for Github releases
+    github_releases_url = project_overview_url + "/releases"
+
+    # download the Github releases page
+    currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+    print_and_log("Fetching project releases... (" + currenttime + ")", LOG_FILE)
+    subprocess.run(["wget", "--output-document", GITHUB_RELEASES_FILE, github_releases_url])
+    currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+    print_and_log("Finished fetching releases! (" + currenttime + ")\n", LOG_FILE)
+
+    # parse the latest release url from the downloaded Github releases page
+    url = ""
+    currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+    print_and_log("Parsing latest version... (" + currenttime + ")", LOG_FILE)
+    with open(GITHUB_RELEASES_FILE, "r") as file:
+        for line in file.readlines():
+            filter_results = []
+            for f in config["search_filters"]:
+                filter_results.append(f in line)
+
+            # find the first line that contains the search filters. this should be our latest download, being closest to the top of the screen
+            if not False in filter_results:
+                # find the opening quotation mark for the url
+                lower_index = line.find("href=\"") + len("href=\"") if not line.find("href=\"") == -1 else -1
+                # find the closing quotation mark for the url
+                upper_index = -1
+                for i in range(lower_index, len(line)):
+                    if line[i] == '\"':
+                        upper_index = i
+                        break
+                if lower_index == -1 or upper_index == -1:
+                    # if no opening or closing quotation mark is found, this is not our download url, so skip to next line
+                    continue
+                # if both an opening and a closing quotation mark have been found, set the url to be returned and break out
+                url = GITHUB_DOMAIN + line[lower_index:upper_index]
+                break
+    if url == "":
+        print_and_log("ERROR!: No download link found in project version history!\n", LOG_FILE)
+    os.remove(GITHUB_RELEASES_FILE)
+    return url
+
+# prints message to terminal and logs it in the specified log
+def print_and_log(message: str, log = LOG_FILE, exit = False, new_line_in_file = True):
+    with open(log, "a") as file:
+        file.write(message + "\n" if new_line_in_file else message)
+    if not exit:
+        print(message)
+    else:
+        sys.exit(message)
+
+# show last update time
+def show_last_update_time():
+    last_update = "No Log Found"
+
+    # fetch update time
+    if os.path.isfile(LOG_FILE):
+        with open(LOG_FILE, "r") as file:
+            lines = file.readlines()
+            reversed_lines = [ele for ele in reversed(lines)]
+            for line in reversed_lines:
+                if "[FAIL]" in line:
+                    last_update = line[line.index("(") + 1:-len(")") - 1] + " [UPDATE FAILED!]"
+                    break
+                if "[FINISH]" in line:
+                    last_update = line[line.index("(") + 1:-len(")") - 1]
+                    break
+            
+    # print
+    print("Last Update: \'" + last_update + "\'\n")
+
+# prints the header for the terminal
+def print_header(new_line = False):
+    print("GitHub Updater Script (updater) v" + APP_VERSION + " by Nicholas Girga")
+    print("RELEASED UNDER THE MIT LICENSE WITH ABSOLUTELY NO WARRANTY\n")
+
+# returns the file name of the url passed into it
+def file_from_url(url: str) -> str:
+    return url[len(os.path.dirname(url)) + 1:]
+
+# returns the temporary file name of file name passed into it
+def get_temporary_file(file_name: str) -> str:
+    return "." + file_name + ".tmp" if not ".tmp" in file_name else file_name
+
+# returns the permanent file name of a temporary file name passed to it
+def get_permanent_file(tmp_file_name) -> str:
+    return tmp_file_name[1:-4] if ".tmp" in tmp_file_name else tmp_file_name
+
+# constructs an example config file
+def create_config(_config_file = CONFIG_FILE):
+    file_exists(_config_file)
+    with open(_config_file, "w") as file:
+        file.write("[UPDATER VERSION " + APP_VERSION + " CONFIG]\n")
+        file.write("# THIS FILE WAS AUTOMATICALLY CREATED BY THE GITHUB UPDATER SCRIPT\n")
+    write_config("project_url", "https://github.com/jagrosh/MusicBot # example project")
+    write_config("search_filters","\"" + "\", \"".join(["href", ".jar"]) + "\" # surround filters with quotation marks, separate by comma")
+    write_config("output_file", "-1 # set to -1 to use the name of the file on the server")
+    write_config("launch_interpreter", " ".join(["java", "-jar"]) + " # used to run file with `updater run`")
+    write_config("launch_options", " # used to run file with `updater run`")
+    write_config("launch_file", " # used to run file with `updater run`; will update itself when an update is performed")
+
+# returns a string from the config at the given a key (or -1 if not found)
+# not to be confused with load_config(_config_file)
+# note that for each line, all text that comes after the '#' symbol will be ignored (for comments)
+# e.g. calling `read_config("test")` when my config says "test=12345 # just for testing purposes" will only return "12345"
+def read_config(key: str, _config_file = CONFIG_FILE) -> str:
+    with open(_config_file, "r") as file:
+        for line in file.readlines():
+            # if the line starts with the specified key
+            if line[:len(key + "=")] == key + "=":
+                value = ""
+                # iterate through each character in the line
+                for c in line[len(key + "="):]:
+                    if c == "#":
+                        # if we reach a '#' symbol, iterate through each character backwards until we reach a "real" character
+                        char_count = 0
+                        for x in reversed(value):
+                            if not x == " ":
+                                break
+                            char_count += 1
+                        # remove trailing new line
+                        if value[len(value) - 1] == "\n":
+                            value = value[:-1]
+                        return value[:-char_count]
+                    # add each character to the end value string
+                    value += c
+                # remove trailing new line
+                if value[len(value) - 1] == "\n":
+                    value = value[:-1]
+                return value
+        print("WARN!: Tried to pull information from config, but the information did not exist! (" + key + "). Returning \"-1\". ")
+        return -1
+
+# writes the value to the config at the given key (or appends it if not found)
+# note that comments will be overwritten and that comments can be written in the value argument (only AFTER your actual value)
+# e.g. `write_config("project_url", "https://github.com/___/___ # the project url to ____")`
+def write_config(key: str, value: str, _config_file = CONFIG_FILE):
+    # read config
+    lines = []
+    with open(_config_file, "r") as file:
+        lines = file.readlines()
+
+    # create new list to fill will updated text
+    new_lines = []
+    modified = False
+    for line in lines:
+        if line[:len(key + "=")] == key + "=":
+            # if the current line matches the specified key, save the passed value instead of the value in the original line
+            new_lines.append(key + "=" + value + "\n")
+            modified = True
+            continue
+        # if the current line does not match the specified key, add it to the new list unmodified
+        new_lines.append(line)
+    
+    # if the list was not modified by the specified key, append it to the end of the config
+    if not modified:
+        print("Tried to write information in config, but the information did not exist! (" + key + "). Appending to config.")
+        new_lines.append(key + "=" + value + "\n")
+
+    # write all of the lines in the new list to the actual file
+    with open(_config_file, "w") as file:
+        for line in new_lines:
+            if line == "\n":
+                continue
+            file.write(line)
+
+# returns a dictionary full of the properties in _config_file
+# not to be confused with read_config(key, _config_file)
+def load_config(_config_file = CONFIG_FILE) -> {}:
+    # create config file if it does not exist
+    if not file_exists(_config_file, False):
+        create_config(_config_file)
+
+    # create file header
+    with open(_config_file, "r") as file:
+        header = file.readlines()[0]
+        if header[:len("[UPDATER VERSION ")] == "[UPDATER VERSION ":
+            if not header[1:-1].split(" ")[2] == APP_VERSION:
+                print("WARN!: The config file for the updater was created using an older version of updater. You may need to create a new one. ")
+
+    # create empty dictionary
+    config = {}
+
+    # populate config dictionary with values from _config_file
+    config["project_url"] = read_config("project_url")
+    search_filters_str = read_config("search_filters")
+    if not search_filters_str == -1:
+        config["search_filters"] = search_filters_str[1:-1].split("\", \"")
+    config["output_file"] = read_config("output_file")
+    launch_interpreter_str = read_config("launch_interpreter")
+    if not launch_interpreter_str == -1:
+        config["launch_interpreter"] = launch_interpreter_str.split(" ")
+    launch_options_str = read_config("launch_options")
+    if not launch_options_str == -1:
+        config["launch_options"] = launch_options_str.split(" ")
+    config["launch_file"] = read_config("launch_file")
+
+    # return the dictionaty
+    return config
+
+""" initialize """
+# create directories and files
+file_exists(LOG_FILE)
+
+# read config
+config = load_config()
+
+# process passed arguments
+args = sys.argv[1:]
+for arg in args:
+    match arg:
+        # print help info
+        case "help":
+            print_header()
+            print("Help: ")
+            print(" `updater` - performs an update ")
+            print(" `updater help` - shows how to use the GitHub Updater Script ")
+            print(" `updater history` - shows the time that the last update completed ")
+            print(" `updater run` - runs the file we download from GitHub")
+            print(" `updater update` - an explicit way to invoke an update ")
+            print(" `updater version` - shows the version of the GitHub Updater Script currently in use\n")
+            sys.exit()
+
+        # print the time of the last update
+        case "history":
+            show_last_update_time()
+            sys.exit()
+
+        # runs the file with the specified interpreters and launch options
+        case "run":
+            # clear the screen
+            if not "--no-clear" in args:
+                os.system("clear")
+
+            # create empty command list
+            command = []
+
+            # fill command list with interpreters
+            if not config["launch_interpreter"] == [] and not config["launch_interpreter"] == [""]:
+                command = config["launch_interpreter"]
+
+            # fill command list with the file
+            command.append(config["launch_file"])
+
+            # fill command list with launch options
+            if not config["launch_options"] == [] and not config["launch_options"] == [""]:
+                for option in config["launch_options"]:
+                    command.append(option)
+
+            # print time; run file; print time after it exits
+            currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+            print("Executing \"" + " ".join(command) + "\"... (" + currenttime + ")")
+            subprocess.run(command)
+            currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+            print("Process \"" + " ".join(command) + "\" has exited. (" + currenttime + ")\n")
+
+        # perform an update
+        case "update":
+            break
+
+        # print the version of updater currently being used
+        case "version":
+            print_header(True)
+            sys.exit()
+        case _:
+            sys.exit("ERROR!: Invalid command or option: \"" + arg + "\". Run `updater help` to see the available commands and options.\n")
+
+# print app info
+print_header()
+
+# inform user of update starting
+currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+print_and_log("[START] Starting update... (" + currenttime + ")\n", LOG_FILE)
+
+# get the latest release
+latest_github_release = get_latest_github_release(config["project_url"])
+
+# close if release could not be found
+if latest_github_release == "":
+    sys.exit("\nThe updater has experienced a fatal error. Ensure the project_url property is correct and that a release can be found with the specified search_filters under the releases page (NOT the tags page).\n")
+
+# inform user that a release could be found
+currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+print_and_log("Latest release has been found! (" + currenttime + ")\n", LOG_FILE)
+
+# inform user of download starting
+currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+print_and_log("Starting download of latest release... (" + currenttime + ")", LOG_FILE)
+
+# create name for file
+remote_file_name = file_from_url(latest_github_release)
+if remote_file_name == "":
+    print_and_log("A valid file name could not be created with the URL scraped from the releases page (" + latest_github_release + ")! Please specify a file name in the output_file property. ", LOG_FILE, True)
+file_name = remote_file_name if config["output_file"] == "-1" else config["output_file"]
+tmp_file_name = get_temporary_file(file_name)
+
+# print download information
+print_and_log("Source: " + latest_github_release, LOG_FILE)
+
+# download file to temporary location
+try:
+    subprocess.run(["wget", "--output-document", tmp_file_name, latest_github_release])
+except Exception as e:
+    print_and_log("ERROR!: Failed to download the latest release! (" + str(e) + ")\n", LOG_FILE, True)
+
+# inform user of download finishing
+currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+print_and_log("Finished downloading latest release to \"" + tmp_file_name + "\"! (" + currenttime + ")\n", LOG_FILE)
+
+# move file to permanent location
+currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+print_and_log("Moving file to permanent location... (" + currenttime + ")", LOG_FILE)
+try:
+    os.rename(tmp_file_name, file_name)
+except Exception as e:
+    print_and_log("ERROR!: Failed moving download to permanent location! (" + str(e) + ")\n", LOG_FILE, True)
+
+# inform user that the move finished
+currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+print_and_log("Finished moving file to \"" + os.getcwd() + "/" + file_name + "\"! (" + currenttime + ")\n", LOG_FILE)
+
+# record the name of the file for running purposes
+currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+print_and_log("Recording file name to config... (" + currenttime + ")", LOG_FILE)
+write_config("launch_file", file_name + " # used to run file with `updater run`; will update itself when an update is performed")
+currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+print_and_log("Finished recording file name to config! (" + currenttime + ")\n", LOG_FILE)
+
+# inform user of update finishing
+currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
+print_and_log("[FINISH] Update finished! (" + currenttime + ")\n", LOG_FILE)
+
+# TODO: implement file verification
