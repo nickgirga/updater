@@ -165,7 +165,7 @@ def read_config(key: str, _config_file = CONFIG_FILE) -> str:
                         if value[len(value) - 1] == "\n":
                             value = value[:-1]
                         return value[:-char_count]
-                    # add each character to the end value string
+                    # add each character to the end of the value string
                     value += c
                 # remove trailing new line
                 if value[len(value) - 1] == "\n":
