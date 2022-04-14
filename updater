@@ -259,7 +259,7 @@ for arg in args:
             print(" `updater` - performs an update ")
             print(" `updater help` - shows how to use the GitHub Updater Script ")
             print(" `updater history` - shows the time that the last update completed ")
-            print(" `updater run` - runs the file we download from GitHub")
+            print(" `updater run` - runs the file. can add `--no-clear` to prevent clearing the screen before running ")
             print(" `updater update` - an explicit way to invoke an update ")
             print(" `updater version` - shows the version of the GitHub Updater Script currently in use\n")
             sys.exit()
@@ -296,6 +296,7 @@ for arg in args:
             subprocess.run(command)
             currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
             print("Process \"" + " ".join(command) + "\" has exited. (" + currenttime + ")\n")
+            sys.exit()
 
         # perform an update
         case "update":
