@@ -42,7 +42,6 @@ def file_exists(path: str, create_if_missing = True) -> bool:
 # accepts the project_overview_url and returns the url of the latest download of it (for github.com)
 def get_latest_github_release(project_overview_url: str) -> str:
     GITHUB_RELEASES_FILE = ".github_releases.html"
-    DATETIME_FORMAT = "%b %-d, %Y at %-I:%M:%S %p"
 
     # construct the url for Github releases
     github_releases_url = project_overview_url + "/releases"
