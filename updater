@@ -267,7 +267,7 @@ file_exists(LOG_FILE)
 args = sys.argv[1:]
 if "--config" in args:
     config_file = args[args.index("--config") + 1]
-    print("Using specified config for update! (" + config_file + ") ")
+    print("Using specified config! (" + config_file + ") ")
 
 # read config
 config = load_config(config_file)
@@ -289,7 +289,8 @@ while i < len(args):
             print(" `updater history` - shows the time that the last update completed ")
             print(" `updater run` - runs the file. can add `--no-clear` to prevent clearing the screen before running ")
             print(" `updater update` - an explicit way to invoke an update ")
-            print(" `updater version` - shows the version of the GitHub Updater Script currently in use\n")
+            print(" `updater version` - shows the version of the GitHub Updater Script currently in use ")
+            print(" `updater [command] --config <config_file>` - sets the specified config before performing tasks. [command] is optional\n")
             sys.exit()
 
         # print the time of the last update
