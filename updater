@@ -13,8 +13,10 @@ import datetime, os, subprocess, sys
 APP_VERSION = "1.0"
 GITHUB_DOMAIN = "https://github.com"
 LOG_FILE = "./logs/updater.log" # the location of the log file
-CONFIG_FILE = "./config/updater.conf" # the location of the config file
 DATETIME_FORMAT = "%b %-d, %Y at %-I:%M:%S %p" # how the date will be formatted in console messages as well as logs
+
+""" dynamic vars """
+config_file = "./config/updater.conf" # the location of the config file
 
 """ functions """
 # returns true if directory existed before the function was called; creates missing directory if specified
@@ -127,12 +129,16 @@ def file_from_url(url: str) -> str:
 #     "parent": the string that was removed
 # }
 def get_raw_file(file_name: str) -> {}:
+    # get path to parent directory
     parent = os.path.dirname(file_name)
-    raw_file_name = file_name[len(parent) + 1:]
+    # remove path to parent directory from raw_file_name and remove the preceding "/" or "\" if it exists
+    raw_file_name = file_name[len(parent) + 1 if (file_name[len(file_name) - 1] == "/" or file_name[len(file_name) - 1] == "\\") else 0:]
+    # create a results dictionary
     result = {
         "file_name": raw_file_name,
         "parent": parent
     }
+    # return results dictionary
     return result
 
 # returns the temporary file name of file name passed into it
@@ -140,8 +146,10 @@ def get_temporary_file(file_name: str) -> str:
     return "." + get_raw_file(file_name)["file_name"] + ".tmp"
 
 # constructs an example config file
-def create_config(_config_file = CONFIG_FILE):
+def create_config(_config_file = config_file):
+    # create config file if it does not exist
     file_exists(_config_file)
+    # populate config file with default values
     with open(_config_file, "w") as file:
         file.write("[UPDATER VERSION " + APP_VERSION + " CONFIG]\n")
         file.write("# THIS FILE WAS AUTOMATICALLY CREATED BY THE GITHUB UPDATER SCRIPT\n")
@@ -156,7 +164,7 @@ def create_config(_config_file = CONFIG_FILE):
 # not to be confused with load_config(_config_file)
 # note that for each line, all text that comes after the '#' symbol will be ignored (for comments)
 # e.g. calling `read_config("test")` when my config says "test=12345 # just for testing purposes" will only return "12345"
-def read_config(key: str, _config_file = CONFIG_FILE) -> str:
+def read_config(key: str, _config_file = config_file) -> str:
     with open(_config_file, "r") as file:
         for line in file.readlines():
             # if the line starts with the specified key
@@ -187,7 +195,7 @@ def read_config(key: str, _config_file = CONFIG_FILE) -> str:
 # writes the value to the config at the given key (or appends it if not found)
 # note that comments will be overwritten and that comments can be written in the value argument (only AFTER your actual value)
 # e.g. `write_config("project_url", "https://github.com/___/___ # the project url to ____")`
-def write_config(key: str, value: str, _config_file = CONFIG_FILE):
+def write_config(key: str, value: str, _config_file = config_file):
     # read config
     lines = []
     with open(_config_file, "r") as file:
@@ -219,7 +227,7 @@ def write_config(key: str, value: str, _config_file = CONFIG_FILE):
 
 # returns a dictionary full of the properties in _config_file
 # not to be confused with read_config(key, _config_file)
-def load_config(_config_file = CONFIG_FILE) -> {}:
+def load_config(_config_file = config_file) -> {}:
     # create config file if it does not exist
     if not file_exists(_config_file, False):
         create_config(_config_file)
@@ -235,18 +243,18 @@ def load_config(_config_file = CONFIG_FILE) -> {}:
     config = {}
 
     # populate config dictionary with values from _config_file
-    config["project_url"] = read_config("project_url")
-    search_filters_str = read_config("search_filters")
+    config["project_url"] = read_config("project_url", _config_file)
+    search_filters_str = read_config("search_filters", _config_file)
     if not search_filters_str == -1:
         config["search_filters"] = search_filters_str[1:-1].split("\", \"")
-    config["output_file"] = read_config("output_file")
-    launch_interpreter_str = read_config("launch_interpreter")
+    config["output_file"] = read_config("output_file", _config_file)
+    launch_interpreter_str = read_config("launch_interpreter", _config_file)
     if not launch_interpreter_str == -1:
         config["launch_interpreter"] = launch_interpreter_str.split(" ")
-    launch_options_str = read_config("launch_options")
+    launch_options_str = read_config("launch_options", _config_file)
     if not launch_options_str == -1:
         config["launch_options"] = launch_options_str.split(" ")
-    config["launch_file"] = read_config("launch_file")
+    config["launch_file"] = read_config("launch_file", _config_file)
 
     # return the dictionaty
     return config
@@ -255,13 +263,23 @@ def load_config(_config_file = CONFIG_FILE) -> {}:
 # create directories and files
 file_exists(LOG_FILE)
 
-# read config
-config = load_config()
-
-# process passed arguments
+# process --config
 args = sys.argv[1:]
-for arg in args:
-    match arg:
+if "--config" in args:
+    config_file = args[args.index("--config") + 1]
+    print("Using specified config for update! (" + config_file + ") ")
+
+# read config
+config = load_config(config_file)
+
+# process other passed arguments
+i = 0
+while i < len(args):
+    if args[i] == "--config":
+        i += 2
+        continue
+
+    match args[i]:
         # print help info
         case "help":
             print_header()
@@ -317,7 +335,8 @@ for arg in args:
             print_header(True)
             sys.exit()
         case _:
-            sys.exit("ERROR!: Invalid command or option: \"" + arg + "\". Run `updater help` to see the available commands and options.\n")
+            sys.exit("ERROR!: Invalid command or option: \"" + args[i] + "\". Run `updater help` to see the available commands and options.\n")
+    i += 1
 
 # print app info
 print_header()
@@ -376,7 +395,7 @@ print_and_log("Finished moving file to \"" + os.getcwd() + "/" + file_name + "\"
 # record the name of the file for running purposes
 currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
 print_and_log("Recording file name to config... (" + currenttime + ")", LOG_FILE)
-write_config("launch_file", file_name + " # used to run file with `updater run`; will update itself when an update is performed")
+write_config("launch_file", file_name + " # used to run file with `updater run`; will update itself when an update is performed", config_file)
 currenttime = datetime.datetime.now().strftime(DATETIME_FORMAT)
 print_and_log("Finished recording file name to config! (" + currenttime + ")\n", LOG_FILE)
 
