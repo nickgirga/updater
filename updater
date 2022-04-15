@@ -121,13 +121,23 @@ def print_header(new_line = False):
 def file_from_url(url: str) -> str:
     return url[len(os.path.dirname(url)) + 1:]
 
+# returns a dictionary containing the name of the file when we remove the parent path
+# dictionary contents = {
+#     "file_name": the name of the file after removing the parent path
+#     "parent": the string that was removed
+# }
+def get_raw_file(file_name: str) -> {}:
+    parent = os.path.dirname(file_name)
+    raw_file_name = file_name[len(parent) + 1:]
+    result = {
+        "file_name": raw_file_name,
+        "parent": parent
+    }
+    return result
+
 # returns the temporary file name of file name passed into it
 def get_temporary_file(file_name: str) -> str:
-    return "." + file_name + ".tmp" if not ".tmp" in file_name else file_name
-
-# returns the permanent file name of a temporary file name passed to it
-def get_permanent_file(tmp_file_name) -> str:
-    return tmp_file_name[1:-4] if ".tmp" in tmp_file_name else tmp_file_name
+    return "." + get_raw_file(file_name)["file_name"] + ".tmp"
 
 # constructs an example config file
 def create_config(_config_file = CONFIG_FILE):
