@@ -162,13 +162,13 @@ def read_config(key: str, _config_file = CONFIG_FILE) -> str:
                                 break
                             char_count += 1
                         # remove trailing new line
-                        if value[len(value) - 1] == "\n":
+                        if len(value) - 1 >= 0 and value[len(value) - 1] == "\n":
                             value = value[:-1]
                         return value[:-char_count]
                     # add each character to the end of the value string
                     value += c
                 # remove trailing new line
-                if value[len(value) - 1] == "\n":
+                if len(value) - 1 >= 0 and value[len(value) - 1] == "\n":
                     value = value[:-1]
                 return value
         print("WARN!: Tried to pull information from config, but the information did not exist! (" + key + "). Returning \"-1\". ")
