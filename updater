@@ -175,7 +175,7 @@ def read_config(key: str, _config_file = config_file) -> str:
                         # if we reach a '#' symbol, iterate through each character backwards until we reach a "real" character
                         char_count = 0
                         for x in reversed(value):
-                            if not x == " ":
+                            if not (x == " " or x == "\t") :
                                 break
                             char_count += 1
                         # remove trailing new line
